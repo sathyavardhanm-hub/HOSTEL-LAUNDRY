@@ -1,0 +1,654 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hostel Laundry</title>
+<meta name="description" content="See which washing machine is free before you walk down.">
+<style>
+/* Layout: one narrow column, built for phones. Status is shown with a word AND a colour. */
+:root{
+  --bg:#f3f5f7; --card:#ffffff; --ink:#15202a; --muted:#566673; --line:#d9e0e6;
+  --accent:#175f9e; --accent-ink:#ffffff; --badge-ink:#ffffff;
+  --free:#1b7f4b; --free-bg:#e6f5ec;
+  --busy:#8f5400; --busy-bg:#fff1d9;
+  --done:#b3261e; --done-bg:#fde8e6;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0e151b; --card:#17212a; --ink:#eaf0f5; --muted:#9fb1bf; --line:#2b3a46;
+    --accent:#6ab3f3; --accent-ink:#06121c; --badge-ink:#08110c;
+    --free:#5fd197; --free-bg:#11291c;
+    --busy:#f2b45f; --busy-bg:#2f2210;
+    --done:#ff9d95; --done-bg:#371614;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans",sans-serif;min-height:100vh}
+.wrap{max-width:520px;margin:0 auto;padding:20px 16px 56px}
+h1{font-size:1.65rem;line-height:1.2;margin:0 0 6px}
+h2{font-size:1.2rem;margin:0}
+h3{font-size:1.05rem;margin:30px 0 4px}
+p{margin:0}
+.hint{color:var(--muted);margin:6px 0 14px}
+.small{font-size:.9rem;color:var(--muted)}
+.card{background:var(--card);border:2px solid var(--line);border-radius:14px;padding:16px;margin:14px 0}
+.machine.free{background:var(--free-bg);border-color:var(--free)}
+.machine.busy{background:var(--busy-bg);border-color:var(--busy)}
+.machine.done{background:var(--done-bg);border-color:var(--done)}
+.mhead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+.badge{font-size:.9rem;font-weight:700;padding:3px 12px;border-radius:999px;color:var(--badge-ink)}
+.free .badge{background:var(--free)}
+.busy .badge{background:var(--busy);color:#fff}
+.done .badge{background:var(--done)}
+@media (prefers-color-scheme: dark){ .busy .badge{color:var(--badge-ink)} }
+.who{font-weight:600;margin:4px 0}
+.countdown{font-size:2.7rem;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums;color:var(--busy);margin:8px 0 4px}
+.phone{font-size:1.2rem;font-weight:700;font-variant-numeric:tabular-nums;margin:6px 0 10px;overflow-wrap:anywhere}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+.chip{font:inherit;font-weight:600;min-width:76px;min-height:44px;border-radius:10px;border:2px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+.chip.on{background:var(--ink);color:var(--card);border-color:var(--ink)}
+.btn{font:inherit;font-weight:600;border-radius:10px;border:2px solid var(--line);background:var(--card);color:var(--ink);padding:8px 16px;min-height:44px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;text-align:center}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.big{width:100%;min-height:54px;font-size:1.05rem}
+.btn:disabled{opacity:.55;cursor:default}
+.btn:focus-visible,.chip:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+.summary{font-size:1.1rem;font-weight:600;margin:10px 0 0}
+label{display:block;font-weight:600;margin:16px 0 6px}
+input[type=text],input[type=tel]{font:inherit;width:100%;min-height:50px;padding:10px 12px;border:2px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
+.check{display:flex;gap:10px;align-items:flex-start;font-weight:400;margin-top:18px}
+.check input{width:22px;height:22px;margin:2px 0 0;flex:none}
+.error{color:var(--done);font-weight:600;margin:12px 0 0;min-height:1.2em}
+.banner{background:var(--busy-bg);border:2px solid var(--busy);border-radius:10px;padding:10px 12px;margin:0 0 14px}
+.banner.bad{background:var(--done-bg);border-color:var(--done)}
+.list{list-style:none;padding:0;margin:8px 0 0}
+.list li{border-top:1px solid var(--line);padding:12px 0;display:flex;flex-direction:column;gap:8px}
+.list strong{overflow-wrap:anywhere}
+.toast{position:fixed;left:16px;right:16px;bottom:16px;max-width:488px;margin:0 auto;background:var(--ink);color:var(--bg);padding:12px 16px;border-radius:10px;font-weight:600;z-index:5}
+.toast.bad{background:var(--done);color:#fff}
+.center{text-align:center;padding-top:12vh}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <div id="demoBanner" class="banner" hidden>
+    <strong>Practice mode.</strong> Nothing is saved and the people shown are made up. Finish SETUP.md to make it real.
+  </div>
+  <div id="errorBanner" class="banner bad" role="alert" hidden></div>
+
+  <section id="screenLoading" class="center">
+    <p class="hint">Loading...</p>
+  </section>
+
+  <section id="screenSignin" hidden>
+    <h1>Hostel Laundry</h1>
+    <p class="hint">See if a washing machine is free before you walk down. Sign in with your Google account to start.</p>
+    <button type="button" id="btnSignIn" class="btn primary big">Sign in with Google</button>
+    <p class="small" style="margin-top:14px">First time here? After you sign in, you will fill in your name, phone, hostel and room. The hostel owner then approves you.</p>
+  </section>
+
+  <section id="screenProfile" hidden>
+    <h1 id="formTitle">Your details</h1>
+    <p class="hint" id="formHint"></p>
+    <form id="profileForm" novalidate>
+      <label for="fName">Full name</label>
+      <input id="fName" type="text" autocomplete="name" maxlength="60">
+      <label for="fPhone">Phone number</label>
+      <input id="fPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="10-digit mobile number" maxlength="16">
+      <label for="fHostel">Hostel name or block</label>
+      <input id="fHostel" type="text" maxlength="40">
+      <label for="fRoom">Room number</label>
+      <input id="fRoom" type="text" maxlength="10">
+      <label class="check" id="consentRow" for="fConsent">
+        <input type="checkbox" id="fConsent">
+        <span>I agree that other approved residents can see my name, room and phone number when my laundry is finished.</span>
+      </label>
+      <p class="error" id="formError" role="alert"></p>
+      <div class="row" style="margin-top:14px">
+        <button type="submit" id="formSave" class="btn primary big">Save and continue</button>
+        <button type="button" id="formCancel" class="btn" hidden>Cancel</button>
+      </div>
+      <div id="formDeleteWrap" style="margin-top:24px" hidden>
+        <p class="small" style="margin-bottom:8px">Moving out? You can remove your details from this site.</p>
+        <span id="formDeleteSlot"></span>
+      </div>
+    </form>
+  </section>
+
+  <section id="screenPending" hidden>
+    <h1 id="pendingTitle">Waiting for approval</h1>
+    <p class="hint">Your request has been sent. Please tell the hostel owner you have signed up. This page changes by itself as soon as you are approved.</p>
+    <div class="card">
+      <p class="who" id="pendingWho"></p>
+      <p class="small" id="pendingInfo"></p>
+    </div>
+    <div class="row">
+      <button type="button" id="pendingEdit" class="btn">Edit my details</button>
+      <button type="button" id="pendingOut" class="btn">Sign out</button>
+    </div>
+  </section>
+
+  <section id="screenMain" hidden>
+    <div class="top">
+      <div>
+        <h1 id="greet">Hi</h1>
+        <p class="small" id="hostelLine"></p>
+      </div>
+      <div class="row">
+        <button type="button" id="btnDetails" class="btn">My details</button>
+        <button type="button" id="btnOut" class="btn">Sign out</button>
+      </div>
+    </div>
+    <p class="summary" id="summary" aria-live="polite"></p>
+    <div id="machines"></div>
+    <p class="small">Timers are set by the person using the machine. If a machine is finished and the clothes are still inside, call the person shown.</p>
+
+    <div id="adminBox" hidden>
+      <h3>Owner: waiting for approval<span id="pendingCount"></span></h3>
+      <p class="small" id="pendingEmpty">Nobody is waiting.</p>
+      <ul class="list" id="pendingList"></ul>
+      <h3>Owner: approved residents</h3>
+      <p class="small" id="residentsEmpty">No approved residents yet.</p>
+      <ul class="list" id="residentsList"></ul>
+    </div>
+  </section>
+</main>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<noscript><p style="padding:16px">This site needs JavaScript. Please turn it on in your browser.</p></noscript>
+
+<script src="firebase-config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script>
+(function(){
+"use strict";
+
+var S = window.APP_SETTINGS || {};
+var cfg = S.firebaseConfig || {};
+var demo = !cfg.apiKey || /^PASTE/i.test(cfg.apiKey) || typeof firebase === "undefined";
+var OWNER = String(S.ownerEmail || "").trim().toLowerCase();
+
+function $(id){ return document.getElementById(id); }
+function el(tag, cls, text){
+  var e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+function btn(label, cls, fn){
+  var b = el("button", "btn " + (cls || ""), label);
+  b.type = "button";
+  b.addEventListener("click", function(){ fn(b); });
+  return b;
+}
+function armed(label, armedLabel, cls, fn){
+  var on = false, t = null;
+  var b = btn(label, cls, function(){
+    if (!on){
+      on = true; b.textContent = armedLabel;
+      t = setTimeout(function(){ on = false; b.textContent = label; }, 4000);
+      return;
+    }
+    clearTimeout(t); on = false; b.textContent = label;
+    Promise.resolve().then(fn).catch(function(){ toast("That did not work. Please try again.", true); });
+  });
+  return b;
+}
+function pad(n){ return n < 10 ? "0" + n : "" + n; }
+function fmt(ms){
+  var s = Math.max(0, Math.ceil(ms / 1000));
+  var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+  return h ? h + ":" + pad(m) + ":" + pad(ss) : pad(m) + ":" + pad(ss);
+}
+function timeStr(ms){
+  return new Date(ms).toLocaleTimeString([], {hour: "numeric", minute: "2-digit"});
+}
+function firstName(n){ return String(n || "").split(" ")[0] || "there"; }
+function normPhone(v){
+  var d = String(v || "").replace(/\D/g, "");
+  if (d.length === 12 && d.indexOf("91") === 0) d = d.slice(2);
+  if (d.length === 11 && d.charAt(0) === "0") d = d.slice(1);
+  return /^[6-9]\d{9}$/.test(d) ? d : "";
+}
+function hint(err){
+  if (err && err.code === "permission-denied")
+    return "Permission denied. The database rules may not be set up yet (SETUP.md, step 5).";
+  return "Please check your internet and try again.";
+}
+
+var toastTimer = null;
+function toast(msg, bad){
+  var t = $("toast");
+  t.textContent = msg; t.className = "toast" + (bad ? " bad" : ""); t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ t.hidden = true; }, 4500);
+}
+function showError(msg){ var b = $("errorBanner"); b.textContent = msg; b.hidden = false; }
+
+/* ---------------- Data layer: real (Firebase) or practice (demo) ---------------- */
+
+function toMachine(d){
+  if (!d || d.status !== "running") return {status: "free"};
+  var t = d.startedAt && d.startedAt.toMillis ? d.startedAt.toMillis() : Date.now();
+  return {status: "running", uid: d.uid, name: d.name, room: d.room, hostel: d.hostel,
+          phone: d.phone, durationMin: d.durationMin, startMs: t};
+}
+
+function makeFirebase(){
+  firebase.initializeApp(cfg);
+  var auth = firebase.auth(), db = firebase.firestore();
+  var TS = firebase.firestore.FieldValue.serverTimestamp;
+  function users(status, cb, err){
+    return db.collection("users").where("status", "==", status).onSnapshot(function(snap){
+      cb(snap.docs.map(function(d){ var x = d.data(); x.uid = d.id; return x; }));
+    }, err);
+  }
+  return {
+    onAuth: function(cb){
+      auth.onAuthStateChanged(function(u){
+        cb(u ? {uid: u.uid, email: u.email || "", displayName: u.displayName || ""} : null);
+      });
+    },
+    signIn: function(){
+      var p = new firebase.auth.GoogleAuthProvider();
+      return auth.signInWithPopup(p).catch(function(e){
+        if (e.code === "auth/popup-blocked" || e.code === "auth/operation-not-supported-in-this-environment")
+          return auth.signInWithRedirect(p);
+        throw e;
+      });
+    },
+    signOut: function(){ return auth.signOut(); },
+    watchProfile: function(uid, cb, err){
+      return db.collection("users").doc(uid).onSnapshot(function(d){ cb(d.exists ? d.data() : null); }, err);
+    },
+    saveProfile: function(uid, fields, extra){
+      var ref = db.collection("users").doc(uid);
+      if (extra){
+        var all = Object.assign({}, fields, extra, {createdAt: TS()});
+        return ref.set(all);
+      }
+      return ref.set(fields, {merge: true});
+    },
+    deleteProfile: function(uid){ return db.collection("users").doc(uid).delete(); },
+    watchMachines: function(cb, err){
+      return db.collection("machines").onSnapshot(function(snap){
+        var map = {};
+        snap.forEach(function(d){ map[d.id] = toMachine(d.data()); });
+        cb(map);
+      }, err);
+    },
+    startMachine: function(id, p){
+      var data = Object.assign({status: "running", startedAt: TS()}, p);
+      return db.collection("machines").doc(id).set(data);
+    },
+    freeMachine: function(id){ return db.collection("machines").doc(id).set({status: "free"}); },
+    watchUsers: users,
+    setStatus: function(uid, s){ return db.collection("users").doc(uid).update({status: s}); },
+    removeUser: function(uid){ return db.collection("users").doc(uid).delete(); }
+  };
+}
+
+function makeDemo(){
+  var L = {auth: [], profile: [], machines: [], users: []};
+  var me = null, prof = null;
+  var ms = {
+    m1: {status: "free"},
+    m2: {status: "running", uid: "someone", name: "Ravi Kumar", room: "204", hostel: "Block A",
+         phone: "9876543210", durationMin: 45, startMs: Date.now() - 46 * 60000}
+  };
+  var us = [
+    {uid: "u1", name: "Sneha Reddy", email: "sneha@example.com", phone: "9123456780", hostel: "Block A", room: "112", status: "pending"},
+    {uid: "u2", name: "Arjun Mehta", email: "arjun@example.com", phone: "9988776655", hostel: "Block B", room: "305", status: "approved"}
+  ];
+  function clone(x){ return JSON.parse(JSON.stringify(x)); }
+  function emit(k){ L[k].slice().forEach(function(f){ f(); }); }
+  function sub(k, fn){
+    L[k].push(fn); fn();
+    return function(){ L[k] = L[k].filter(function(x){ return x !== fn; }); };
+  }
+  return {
+    onAuth: function(cb){ sub("auth", function(){ cb(me ? clone(me) : null); }); },
+    signIn: function(){ me = {uid: "demo", email: "demo@example.com", displayName: "Demo User"}; emit("auth"); return Promise.resolve(); },
+    signOut: function(){ me = null; prof = null; emit("auth"); return Promise.resolve(); },
+    watchProfile: function(uid, cb){ return sub("profile", function(){ cb(prof ? clone(prof) : null); }); },
+    saveProfile: function(uid, fields, extra){
+      prof = Object.assign({}, prof || {}, fields, extra || {});
+      emit("profile"); return Promise.resolve();
+    },
+    deleteProfile: function(){ prof = null; emit("profile"); return Promise.resolve(); },
+    watchMachines: function(cb){ return sub("machines", function(){ cb(clone(ms)); }); },
+    startMachine: function(id, p){
+      ms[id] = Object.assign({status: "running", startMs: Date.now()}, p);
+      emit("machines"); return Promise.resolve();
+    },
+    freeMachine: function(id){ ms[id] = {status: "free"}; emit("machines"); return Promise.resolve(); },
+    watchUsers: function(status, cb){
+      return sub("users", function(){ cb(clone(us.filter(function(u){ return u.status === status; }))); });
+    },
+    setStatus: function(uid, s){
+      us.forEach(function(u){ if (u.uid === uid) u.status = s; });
+      emit("users"); return Promise.resolve();
+    },
+    removeUser: function(uid){
+      us = us.filter(function(u){ return u.uid !== uid; });
+      emit("users"); return Promise.resolve();
+    }
+  };
+}
+
+var data = demo ? makeDemo() : makeFirebase();
+if (demo) $("demoBanner").hidden = false;
+
+/* ---------------- App state ---------------- */
+
+var user = null, profile = null, machines = {};
+var view = "", authUnsubs = [], mainUnsubs = [];
+var chosen = {m1: 45, m2: 45};
+var formIsNew = false;
+
+function isAdmin(){
+  return !!user && (demo || String(user.email || "").toLowerCase() === OWNER);
+}
+
+function show(name){
+  ["screenLoading", "screenSignin", "screenProfile", "screenPending", "screenMain"].forEach(function(id){
+    $(id).hidden = id !== name;
+  });
+  view = name;
+  window.scrollTo(0, 0);
+}
+
+function stopMain(){
+  mainUnsubs.forEach(function(f){ try { f(); } catch (e) {} });
+  mainUnsubs = []; machines = {};
+}
+
+function route(){
+  if (!user) return;
+  if (view === "screenProfile") return;
+  if (!profile){ openForm(true); return; }
+  if (profile.status === "approved") openMain(); else openPending();
+}
+
+/* ---------------- Sign in / out ---------------- */
+
+$("btnSignIn").addEventListener("click", function(){
+  data.signIn().catch(function(e){
+    if (e && e.code === "auth/popup-closed-by-user") return;
+    showError("Sign-in did not work. " + (e && e.code === "auth/unauthorized-domain"
+      ? "Add this website's address under Authentication > Settings > Authorized domains (SETUP.md, step 6)."
+      : "Please try again."));
+  });
+});
+function doSignOut(){ data.signOut(); }
+$("btnOut").addEventListener("click", doSignOut);
+$("pendingOut").addEventListener("click", doSignOut);
+
+data.onAuth(function(u){
+  authUnsubs.forEach(function(f){ try { f(); } catch (e) {} });
+  authUnsubs = []; stopMain();
+  user = u; profile = null; $("errorBanner").hidden = true;
+  if (!u){ show("screenSignin"); return; }
+  show("screenLoading");
+  authUnsubs.push(data.watchProfile(u.uid, function(p){ profile = p; route(); }, function(err){
+    showError("Could not load your account. " + hint(err));
+    show("screenSignin");
+  }));
+});
+
+/* ---------------- Details form ---------------- */
+
+function openForm(isNew){
+  stopMain(); formIsNew = isNew; show("screenProfile");
+  $("formTitle").textContent = isNew ? "Create your account" : "Your details";
+  $("formHint").textContent = isNew
+    ? (isAdmin() ? "You are the owner, so you will be approved automatically."
+                 : "Fill this in once. The hostel owner will approve you after this.")
+    : "Update anything that has changed.";
+  var p = profile || {};
+  $("fName").value = p.name || (user && user.displayName) || "";
+  $("fPhone").value = p.phone || "";
+  $("fHostel").value = p.hostel || "";
+  $("fRoom").value = p.room || "";
+  $("consentRow").hidden = !isNew;
+  $("fConsent").checked = !isNew;
+  $("formCancel").hidden = isNew;
+  $("formDeleteWrap").hidden = isNew;
+  $("formError").textContent = "";
+}
+
+$("profileForm").addEventListener("submit", function(e){
+  e.preventDefault();
+  var name = $("fName").value.trim().replace(/\s+/g, " ");
+  var phone = normPhone($("fPhone").value);
+  var hostel = $("fHostel").value.trim();
+  var room = $("fRoom").value.trim();
+  var err = $("formError");
+  if (name.length < 2){ err.textContent = "Please enter your full name."; $("fName").focus(); return; }
+  if (!phone){ err.textContent = "Please enter a valid 10-digit mobile number."; $("fPhone").focus(); return; }
+  if (!hostel){ err.textContent = "Please enter your hostel name or block."; $("fHostel").focus(); return; }
+  if (!room){ err.textContent = "Please enter your room number."; $("fRoom").focus(); return; }
+  if (formIsNew && !$("fConsent").checked){ err.textContent = "Please tick the box to agree."; return; }
+  err.textContent = "";
+  var b = $("formSave"); b.disabled = true;
+  var extra = formIsNew ? {email: user.email, status: isAdmin() ? "approved" : "pending"} : null;
+  data.saveProfile(user.uid, {name: name, phone: phone, hostel: hostel, room: room}, extra).then(function(){
+    toast(formIsNew ? "Saved." : "Details updated.");
+    view = "";
+    if (profile) route(); else show("screenLoading");
+  }).catch(function(ex){
+    err.textContent = "Could not save. " + hint(ex);
+  }).then(function(){ b.disabled = false; });
+});
+
+$("formCancel").addEventListener("click", function(){ view = ""; route(); });
+$("formDeleteSlot").appendChild(armed("Delete my details", "Tap again to delete", "", function(){
+  return data.deleteProfile(user.uid).then(function(){
+    toast("Your details were deleted.");
+    return data.signOut();
+  });
+}));
+
+$("btnDetails").addEventListener("click", function(){ openForm(false); });
+$("pendingEdit").addEventListener("click", function(){ openForm(false); });
+
+/* ---------------- Pending screen ---------------- */
+
+function openPending(){
+  stopMain(); show("screenPending");
+  $("pendingWho").textContent = profile.name;
+  $("pendingInfo").textContent = profile.hostel + " · Room " + profile.room + " · " + profile.phone;
+}
+
+/* ---------------- Main screen ---------------- */
+
+function openMain(){
+  show("screenMain");
+  $("greet").textContent = "Hi, " + firstName(profile.name);
+  $("hostelLine").textContent = profile.hostel + " · Room " + profile.room;
+  $("adminBox").hidden = !isAdmin();
+  if (!mainUnsubs.length) startMain();
+  renderMachines();
+}
+
+function startMain(){
+  mainUnsubs.push(data.watchMachines(function(m){
+    machines = m;
+    if (view === "screenMain") renderMachines();
+  }, function(err){ showError("Could not load the machines. " + hint(err)); }));
+  if (isAdmin()){
+    mainUnsubs.push(data.watchUsers("pending", renderPending, function(err){ showError("Could not load requests. " + hint(err)); }));
+    mainUnsubs.push(data.watchUsers("approved", renderResidents, function(err){ showError("Could not load residents. " + hint(err)); }));
+  }
+}
+
+function stateOf(m){
+  if (!m || m.status !== "running") return {k: "free"};
+  var end = m.startMs + m.durationMin * 60000;
+  var left = end - Date.now();
+  return left > 0 ? {k: "busy", left: left, end: end} : {k: "done", end: end};
+}
+
+function renderMachines(){
+  var box = $("machines"); box.textContent = "";
+  var free = 0;
+  ["m1", "m2"].forEach(function(id, i){
+    if (stateOf(machines[id]).k === "free") free++;
+    box.appendChild(machineCard(id, "Machine " + (i + 1)));
+  });
+  $("summary").textContent = free === 2 ? "Both machines are free."
+    : free === 1 ? "1 of 2 machines is free." : "No machine is free right now.";
+}
+
+function startUse(id, label, b){
+  b.disabled = true;
+  data.startMachine(id, {
+    uid: user.uid, name: profile.name, room: profile.room, hostel: profile.hostel,
+    phone: profile.phone, durationMin: chosen[id]
+  }).then(function(){
+    toast(label + " started for " + chosen[id] + " minutes.");
+  }).catch(function(){
+    b.disabled = false;
+    toast("Could not start. Someone may have just started it. Please check again.", true);
+  });
+}
+
+function release(id, b){
+  b.disabled = true;
+  data.freeMachine(id).then(function(){ toast("Marked free. Thank you!"); })
+    .catch(function(){ b.disabled = false; toast("Could not update. Please try again.", true); });
+}
+
+function machineCard(id, label){
+  var m = machines[id] || {status: "free"};
+  var st = stateOf(m);
+  var mine = st.k !== "free" && m.uid === user.uid;
+  var card = el("section", "card machine " + st.k);
+  card.setAttribute("aria-label", label);
+  var head = el("div", "mhead");
+  head.appendChild(el("h2", null, label));
+  head.appendChild(el("span", "badge", st.k === "free" ? "Free" : st.k === "busy" ? "In use" : "Finished"));
+  card.appendChild(head);
+
+  if (st.k === "free"){
+    card.appendChild(el("p", "hint", "Nobody is using this machine. Pick the wash time, then tap Start."));
+    var chips = el("div", "chips");
+    chips.setAttribute("role", "group");
+    chips.setAttribute("aria-label", "Wash time in minutes");
+    [30, 45, 60, 90].forEach(function(min){
+      var c = btn(min + " min", "chip" + (chosen[id] === min ? " on" : ""), function(){
+        chosen[id] = min;
+        Array.prototype.forEach.call(chips.children, function(x){
+          var on = x === c;
+          x.classList.toggle("on", on);
+          x.setAttribute("aria-pressed", on ? "true" : "false");
+        });
+      });
+      c.classList.remove("btn");
+      c.classList.add("chip");
+      c.setAttribute("aria-pressed", chosen[id] === min ? "true" : "false");
+      chips.appendChild(c);
+    });
+    card.appendChild(chips);
+    card.appendChild(btn("Start using " + label, "primary big", function(b){ startUse(id, label, b); }));
+    return card;
+  }
+
+  card.appendChild(el("p", "who", m.name + " · Room " + m.room));
+
+  if (st.k === "busy"){
+    var cd = el("div", "countdown", fmt(st.left));
+    cd.dataset.end = String(st.end);
+    card.appendChild(cd);
+    card.appendChild(el("p", "small", "Timer ends around " + timeStr(st.end) + "."));
+    if (mine){
+      var r = el("div", "row"); r.style.marginTop = "12px";
+      r.appendChild(btn("I'm done, clothes taken", "primary", function(b){ release(id, b); }));
+      card.appendChild(r);
+    } else {
+      card.appendChild(el("p", "hint", "Please wait, or check the other machine."));
+    }
+  } else {
+    card.appendChild(el("p", "hint", "The timer finished at " + timeStr(st.end) + ". The clothes may still be inside."));
+    if (m.hostel) card.appendChild(el("p", "small", m.hostel));
+    if (!mine && m.phone){
+      card.appendChild(el("p", "phone", m.phone));
+      var call = el("a", "btn primary big", "Call " + firstName(m.name));
+      call.href = "tel:" + String(m.phone).replace(/[^\d+]/g, "");
+      card.appendChild(call);
+    }
+    if (mine){
+      var r2 = el("div", "row"); r2.style.marginTop = "12px";
+      r2.appendChild(btn("Clothes taken, mark free", "primary big", function(b){ release(id, b); }));
+      card.appendChild(r2);
+    }
+  }
+  if (isAdmin() && !mine){
+    var ra = el("div", "row"); ra.style.marginTop = "12px";
+    ra.appendChild(armed("Owner: reset machine", "Tap again to reset", "", function(){ return data.freeMachine(id); }));
+    card.appendChild(ra);
+  }
+  return card;
+}
+
+setInterval(function(){
+  if (view !== "screenMain") return;
+  var flip = false;
+  Array.prototype.forEach.call(document.querySelectorAll(".countdown"), function(c){
+    var left = Number(c.dataset.end) - Date.now();
+    if (left <= 0) flip = true; else c.textContent = fmt(left);
+  });
+  if (flip) renderMachines();
+}, 1000);
+
+/* ---------------- Owner lists ---------------- */
+
+function byName(a, b){ return String(a.name || "").localeCompare(String(b.name || "")); }
+
+function renderPending(list){
+  var ul = $("pendingList"); ul.textContent = "";
+  list.sort(byName);
+  $("pendingEmpty").hidden = list.length > 0;
+  $("pendingCount").textContent = list.length ? " (" + list.length + ")" : "";
+  list.forEach(function(u){
+    var li = el("li");
+    li.appendChild(el("strong", null, u.name));
+    li.appendChild(el("span", "small", u.hostel + " · Room " + u.room + " · " + u.phone));
+    if (u.email) li.appendChild(el("span", "small", u.email));
+    var row = el("div", "row");
+    row.appendChild(btn("Approve", "primary", function(b){
+      b.disabled = true;
+      data.setStatus(u.uid, "approved").catch(function(){ b.disabled = false; toast("Could not approve. Please try again.", true); });
+    }));
+    row.appendChild(armed("Reject", "Tap again to reject", "", function(){ return data.removeUser(u.uid); }));
+    li.appendChild(row);
+    ul.appendChild(li);
+  });
+}
+
+function renderResidents(list){
+  var ul = $("residentsList"); ul.textContent = "";
+  list.sort(byName);
+  $("residentsEmpty").hidden = list.length > 0;
+  list.forEach(function(u){
+    var li = el("li");
+    li.appendChild(el("strong", null, u.name));
+    li.appendChild(el("span", "small", u.hostel + " · Room " + u.room + " · " + u.phone));
+    if (u.uid !== (user && user.uid)){
+      var row = el("div", "row");
+      row.appendChild(armed("Remove", "Tap again to remove", "", function(){ return data.removeUser(u.uid); }));
+      li.appendChild(row);
+    }
+    ul.appendChild(li);
+  });
+}
+})();
+</script>
+</body>
+</html>
